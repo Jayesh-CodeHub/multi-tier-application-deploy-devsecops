@@ -1,4 +1,4 @@
-name: CI with SonarQube Analysis
+name: CI with DevSecOps Scans
 
 on:
   push:
@@ -9,18 +9,18 @@ on:
       - main
 
 jobs:
-  build-and-sonar:
+  build-security-sonar:
     runs-on: ubuntu-latest
 
     steps:
       # -------------------------------
-      # 1. Checkout source code
+      # 1. Checkout Code
       # -------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
       # -------------------------------
-      # 2. Setup Java 8 (App Build)
+      # 2. Setup Java 8 (Build)
       # -------------------------------
       - name: Set up JDK 8
         uses: actions/setup-java@v4
@@ -29,13 +29,25 @@ jobs:
           java-version: '8'
 
       # -------------------------------
-      # 3. Build + Unit Tests
+      # 3. Build Application
       # -------------------------------
       - name: Build with Maven
         run: mvn clean verify -B
 
+      # ===============================
+      # 4. Trivy Filesystem Scan (NEW)
+      # ===============================
+      - name: Trivy FS Scan
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: 0
+          format: table
+
       # -------------------------------
-      # 4. Switch to Java 17 (Sonar Requirement)
+      # 5. Setup Java 17 (Sonar)
       # -------------------------------
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -44,7 +56,7 @@ jobs:
           java-version: '17'
 
       # -------------------------------
-      # 5. SonarQube Analysis
+      # 6. SonarQube Scan
       # -------------------------------
       - name: SonarQube Scan
         env:
@@ -55,5 +67,4 @@ jobs:
             -Dsonar.host.url=${SONAR_HOST_URL} \
             -Dsonar.token=${SONAR_TOKEN} \
             -Dsonar.projectKey=multi-tier-devsecops \
-            -Dsonar.projectName="Multi Tier DevSecOps Application" \
-            -Dsonar.sourceEncoding=UTF-8
+            -Dsonar.projectName="Multi Tier DevSecOps Application"
