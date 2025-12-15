@@ -1,5 +1,5 @@
 
-name: CI (Secrets → Sonar → Maven)
+name: CI (Maven + JaCoCo + SonarQube)
 
 on:
   push:
@@ -9,6 +9,10 @@ on:
 jobs:
   ci:
     runs-on: self-hosted   # or [self-hosted, linux, x64]
+    env:
+      # Set your Sonar project info (update if you want a different key/name)
+      SONAR_PROJECT_KEY: com.reljicd:shopping-cart
+      SONAR_PROJECT_NAME: shopping-cart
 
     steps:
       - name: Checkout (full history for scanners)
@@ -16,32 +20,46 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Java 17 (Temurin) + Maven cache
+      # Your project is Java 8 (Spring Boot 1.5.x). Prefer JDK 8 to avoid plugin issues.
+      - name: Set up Java 8 (Temurin) + Maven cache
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '8'
           cache: maven
-
-      - name: Install prerequisites for Sonar scanner
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y unzip wget
 
       - name: Install Maven (apt)
         run: |
           sudo apt-get update
           sudo apt-get install -y maven
-      # ---- If you prefer a pinned Maven, replace the above with:
-      # - name: Set up Maven 3.9.8
-      #   uses: s4u/setup-maven-action@v1
-      #   with:
-      #     maven-version: '3.9.8'
 
       - name: Gitleaks scan (fail on leaks)
         uses: gitleaks/gitleaks-action@v2
-        # If you only want fail/no-fail, you can remove env:
-        # env:
-        #   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Build with tests so Sonar sees bytecode and test reports
+      # ---- Build & Test (generate JaCoCo XML report) ----
+      - name: Build & test with JaCoCo (creates target/site/jacoco/jacoco.xml)
+        run: |
+          mvn -B -ntp clean verify
+
+      # ---- SonarQube Analysis ----
+      - name: SonarQube scan (Maven)
+        env:
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          mvn -B -ntp sonar:sonar \
+            -Dsonar.host.url="$SONAR_HOST_URL" \
+            -Dsonar.token="$SONAR_TOKEN" \
+            -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
+            -Dsonar.projectName="$SONAR_PROJECT_NAME" \
+            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+
+      # (Optional) Upload reports for debugging
+      - name: Upload test & coverage reports (artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-and-coverage-reports
+          path: |
+            target/surefire-reports/**
+            target/site/jacoco/**
