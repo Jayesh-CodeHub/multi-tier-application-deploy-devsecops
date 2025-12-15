@@ -1,64 +1,44 @@
-
-name: CI (Maven + JaCoCo + SonarQube)
+name: SonarQube Analysis
 
 on:
   push:
     branches: [ "main" ]
-  workflow_dispatch:
+  pull_request:
+    branches: [ "main" ]
 
 jobs:
-  ci:
-    runs-on: self-hosted   # or [self-hosted, linux, x64]
-    env:
-      SONAR_PROJECT_KEY: com.reljicd:shopping-cart
-      SONAR_PROJECT_NAME: shopping-cart
+  build:
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout (full history for scanners)
+      - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      # Java 8 runner (matches POM: Spring Boot 1.5.x, source/target 1.8)
-      - name: Set up Java 8 (Temurin) + Maven cache
+      - name: Set up Java 8 (for build/test)
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '8'
-          cache: maven
 
-      - name: Install Maven (apt)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y maven
+      - name: Build / Unit Tests
+        run: mvn clean verify -B
 
-      - name: Gitleaks scan (fail on leaks)
-        uses: gitleaks/gitleaks-action@v2
+      - name: Set up Java 17 (for Sonar)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
 
-      # Build + unit tests (Surefire) + JaCoCo XML (at verify)
-      - name: Build & test with JaCoCo (creates target/site/jacoco/jacoco.xml)
-        run: |
-          mvn -B -ntp clean verify
-
-      # SonarQube analysis using Java 8–compatible plugin (pinned in pom.xml)
-      - name: SonarQube scan (Maven)
+      - name: SonarQube Scan
         env:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: |
-          mvn -B -ntp sonar:sonar \
-            -Dsonar.host.url="$SONAR_HOST_URL" \
-            -Dsonar.token="$SONAR_TOKEN" \
-            -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
-            -Dsonar.projectName="$SONAR_PROJECT_NAME" \
-            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+          SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+          SONAR_PROJECT_NAME: ${{ secrets.SONAR_PROJECT_NAME }}
+        run: mvn sonar:sonar \
+          -Dsonar.host.url=${{ env.SONAR_HOST_URL }} \
+          -Dsonar.token=${{ env.SONAR_TOKEN }} \
+          -Dsonar.projectKey=${{ env.SONAR_PROJECT_KEY }} \
+          -Dsonar.projectName=${{ env.SONAR_PROJECT_NAME }} \
+          -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
 
-      # Upload reports for debugging (matches paths produced by the POM)
-      - name: Upload test & coverage reports (artifact)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-and-coverage-reports
-          path: |
-            target/surefire-reports/**
-            target/site/jacoco/**
