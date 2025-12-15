@@ -10,7 +10,6 @@ jobs:
   ci:
     runs-on: self-hosted   # or [self-hosted, linux, x64]
     env:
-      # Set your Sonar project info (update if you want a different key/name)
       SONAR_PROJECT_KEY: com.reljicd:shopping-cart
       SONAR_PROJECT_NAME: shopping-cart
 
@@ -20,7 +19,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Your project is Java 8 (Spring Boot 1.5.x). Prefer JDK 8 to avoid plugin issues.
+      # Java 8 runner (matches POM: Spring Boot 1.5.x, source/target 1.8)
       - name: Set up Java 8 (Temurin) + Maven cache
         uses: actions/setup-java@v4
         with:
@@ -36,12 +35,12 @@ jobs:
       - name: Gitleaks scan (fail on leaks)
         uses: gitleaks/gitleaks-action@v2
 
-      # ---- Build & Test (generate JaCoCo XML report) ----
+      # Build + unit tests (Surefire) + JaCoCo XML (at verify)
       - name: Build & test with JaCoCo (creates target/site/jacoco/jacoco.xml)
         run: |
           mvn -B -ntp clean verify
 
-      # ---- SonarQube Analysis ----
+      # SonarQube analysis using Java 8–compatible plugin (pinned in pom.xml)
       - name: SonarQube scan (Maven)
         env:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
@@ -54,7 +53,7 @@ jobs:
             -Dsonar.projectName="$SONAR_PROJECT_NAME" \
             -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
 
-      # (Optional) Upload reports for debugging
+      # Upload reports for debugging (matches paths produced by the POM)
       - name: Upload test & coverage reports (artifact)
         if: always()
         uses: actions/upload-artifact@v4
