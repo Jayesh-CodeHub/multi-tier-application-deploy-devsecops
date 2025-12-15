@@ -1,0 +1,49 @@
+name: CI (Secrets → Sonar → Maven)
+
+on:
+  push:
+    branches: [ "main"]
+
+jobs:
+  ci:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout (full history for scanners)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java 17 (Temurin) + Maven cache
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      # 1) Secret scan — fail the job if any secret is found
+      - name: Gitleaks scan (fail on leaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # For org repos you may need a license:
+          # GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+      # 2) SonarQube analysis — waits for Quality Gate and fails on non‑pass
+      - name: SonarQube scan (wait for Quality Gate)
+        uses: SonarSource/sonarqube-scan-action@v7
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}           # required
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}     # required for self-hosted; omit for SonarCloud
+        with:
+          # Adjust projectKey/name; include the Quality Gate wait so the step fails if gate fails
+          args: >
+            -Dsonar.projectKey=ekart-app
+            -Dsonar.projectName=ekart-app
+            -Dsonar.sources=.
+            -Dsonar.qualitygate.wait=true
+
+      # 3) Build after successful security + quality checks
+      - name: Build (compile, test, package)
+        run: |
+          mvn -B -ntp clean compile test package
