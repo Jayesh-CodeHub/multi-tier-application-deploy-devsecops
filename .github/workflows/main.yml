@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - 'v*'
   pull_request:
     branches:
       - main
@@ -29,19 +31,32 @@ jobs:
           java-version: '8'
 
       # -------------------------------
-      # 3. Build Application
+      # 3. Set Version (SNAPSHOT or RELEASE)
+      # -------------------------------
+      - name: Set Maven Version
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+            echo "Release build detected: $VERSION"
+            mvn versions:set -DnewVersion=$VERSION
+          else
+            echo "Snapshot build on main branch"
+          fi
+
+      # -------------------------------
+      # 4. Build Application
       # -------------------------------
       - name: Build with Maven
         run: mvn clean verify -B
 
       # -------------------------------
-      # 4. Package Application 
+      # 5. Package Application
       # -------------------------------
       - name: Package with Maven
         run: mvn package -DskipTests
 
       # ===============================
-      # 5. Trivy Filesystem Scan
+      # 6. Trivy Filesystem Scan
       # ===============================
       - name: Trivy FS Scan
         uses: aquasecurity/trivy-action@0.20.0
@@ -53,7 +68,7 @@ jobs:
           format: table
 
       # -------------------------------
-      # 6. Setup Java 17 (Sonar)
+      # 7. Setup Java 17 (Sonar)
       # -------------------------------
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -62,7 +77,7 @@ jobs:
           java-version: '17'
 
       # -------------------------------
-      # 7. SonarQube Scan
+      # 8. SonarQube Scan
       # -------------------------------
       - name: SonarQube Scan
         env:
@@ -76,7 +91,7 @@ jobs:
             -Dsonar.projectName="Multi Tier DevSecOps Application"
 
       # -------------------------------
-      # 8. Configure Maven settings.xml (Nexus)
+      # 9. Configure Maven settings.xml (Nexus)
       # -------------------------------
       - name: Configure Maven for Nexus
         run: |
@@ -99,9 +114,7 @@ jobs:
           EOF
 
       # -------------------------------
-      # 9. Deploy Artifact to Nexus
+      # 10. Deploy Artifact to Nexus
       # -------------------------------
       - name: Deploy Artifact to Nexus
-        env:
-          NEXUS_URL: ${{ secrets.NEXUS_URL }}
         run: mvn deploy -DskipTests
