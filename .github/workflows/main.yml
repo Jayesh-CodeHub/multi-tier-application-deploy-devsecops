@@ -1,12 +1,14 @@
+
 name: CI (Secrets → Sonar → Maven)
 
 on:
   push:
-    branches: [ "main"]
+    branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
   ci:
-    runs-on: self-hosted
+    runs-on: self-hosted   # or add labels: [self-hosted, linux, x64]
 
     steps:
       - name: Checkout (full history for scanners)
@@ -21,22 +23,31 @@ jobs:
           java-version: '17'
           cache: maven
 
+      # Ensure Sonar scanner prerequisites are present on self-hosted runner
+      - name: Install prerequisites for Sonar scanner
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unzip wget
+
       # 1) Secret scan — fail the job if any secret is found
       - name: Gitleaks scan (fail on leaks)
         uses: gitleaks/gitleaks-action@v2
+        # GITHUB_TOKEN is auto-provided by GitHub; you don't need to create it.
+        # Keep it only if you want PR comments / annotations.
+        # Remove env block entirely if you just want a fail/no-fail scan.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # For org repos you may need a license:
+          # For org repos, you may need a license:
           # GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
 
-      # 2) SonarQube analysis — waits for Quality Gate and fails on non‑pass
+      # 2) SonarQube analysis — waits for Quality Gate and fails on non-pass
       - name: SonarQube scan (wait for Quality Gate)
         uses: SonarSource/sonarqube-scan-action@v7
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}           # required
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}     # required for self-hosted; omit for SonarCloud
         with:
-          # Adjust projectKey/name; include the Quality Gate wait so the step fails if gate fails
+          # Use '>' (block scalar) — not HTML-escaped — for args
           args: >
             -Dsonar.projectKey=ekart-app
             -Dsonar.projectName=ekart-app
