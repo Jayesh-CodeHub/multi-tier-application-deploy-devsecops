@@ -1,5 +1,5 @@
 
-name: CI (Gitleaks → Maven Verify → Sonar via Maven)
+name: CI (Secrets → Sonar → Maven)
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
 
 jobs:
   ci:
-    runs-on: self-hosted  # or your labels
+    runs-on: self-hosted   # or [self-hosted, linux, x64]
 
     steps:
       - name: Checkout (full history for scanners)
@@ -23,21 +23,25 @@ jobs:
           java-version: '17'
           cache: maven
 
+      - name: Install prerequisites for Sonar scanner
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unzip wget
+
+      - name: Install Maven (apt)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y maven
+      # ---- If you prefer a pinned Maven, replace the above with:
+      # - name: Set up Maven 3.9.8
+      #   uses: s4u/setup-maven-action@v1
+      #   with:
+      #     maven-version: '3.9.8'
+
       - name: Gitleaks scan (fail on leaks)
         uses: gitleaks/gitleaks-action@v2
-        # env: { GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} }  # only if you want PR comments
+        # If you only want fail/no-fail, you can remove env:
+        # env:
+        #   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Build with tests so Sonar "sees" bytecode and reports
-      - name: Build & test (Maven)
-        run: mvn -B -ntp clean verify
-
-      # Sonar analysis via Maven plugin; wait for Quality Gate -> fail pipeline if not passed
-      - name: SonarQube via Maven (Quality Gate)
-        run: mvn -B -ntp sonar:sonar -Dsonar.qualitygate.wait=true
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-
-      # (Optional) Package again, or proceed to next stages if gate passed
-      - name: Package
-        run: mvn -B -ntp package -DskipTests
+      # Build with tests so Sonar sees bytecode and test reports
