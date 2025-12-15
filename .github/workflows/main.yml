@@ -90,7 +90,7 @@ jobs:
                 <password>${{ secrets.NEXUS_PASSWORD }}</password>
               </server>
               <server>
-                <id>nexus-snapshots</id>
+                <id>maven-snapshot</id>
                 <username>${{ secrets.NEXUS_USERNAME }}</username>
                 <password>${{ secrets.NEXUS_PASSWORD }}</password>
               </server>
