@@ -39,6 +39,7 @@ jobs:
             VERSION=${GITHUB_REF#refs/tags/v}
             echo "Release build detected: $VERSION"
             mvn versions:set -DnewVersion=$VERSION
+            mvn versions:commit
           else
             echo "Snapshot build on main branch"
           fi
